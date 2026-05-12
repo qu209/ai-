@@ -1,0 +1,1146 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>🌿 梦岛物语</title>
+<link href="https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=ZCOOL+XiaoWei&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --sky: #a8e6cf;
+    --grass: #56ab2f;
+    --grass2: #a8e063;
+    --sand: #f9e4b7;
+    --water: #74b9ff;
+    --water2: #0984e3;
+    --bark: #8B5E3C;
+    --leaf: #27ae60;
+    --ui-bg: rgba(255,253,240,0.96);
+    --ui-border: #c8a96e;
+    --text: #4a3728;
+    --accent: #ff6b6b;
+    --gold: #f9ca24;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  
+  body {
+    font-family: 'ZCOOL XiaoWei', serif;
+    background: var(--sky);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    user-select: none;
+  }
+
+  /* ====== GAME CANVAS AREA ====== */
+  #game-world {
+    position: relative;
+    width: 100vw;
+    height: 100vh;
+    overflow: hidden;
+  }
+
+  /* Sky gradient */
+  #sky-bg {
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(180deg, #87ceeb 0%, #a8e6cf 60%, #56ab2f 60%);
+  }
+
+  /* Animated clouds */
+  .cloud {
+    position: absolute;
+    background: white;
+    border-radius: 50px;
+    opacity: 0.85;
+    animation: float-cloud linear infinite;
+  }
+  .cloud::before, .cloud::after {
+    content: '';
+    position: absolute;
+    background: white;
+    border-radius: 50%;
+  }
+  @keyframes float-cloud {
+    from { transform: translateX(-200px); }
+    to { transform: translateX(110vw); }
+  }
+
+  /* Ground */
+  #ground {
+    position: absolute;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    height: 44%;
+    background: linear-gradient(180deg, #56ab2f 0%, #4cae4c 20%, #6ab04c 100%);
+  }
+
+  /* River / water */
+  #river {
+    position: absolute;
+    bottom: 18%;
+    left: 28%;
+    width: 14%;
+    height: 26%;
+    background: linear-gradient(180deg, #74b9ff, #0984e3);
+    border-radius: 40% 40% 20% 20%;
+    box-shadow: 0 4px 20px rgba(9,132,227,0.4);
+    overflow: hidden;
+  }
+  #river::after {
+    content: '〰〰〰';
+    position: absolute;
+    bottom: 10px;
+    left: 0; right: 0;
+    text-align: center;
+    color: rgba(255,255,255,0.5);
+    font-size: 12px;
+    animation: ripple 2s ease-in-out infinite;
+  }
+  @keyframes ripple { 0%,100%{opacity:0.4} 50%{opacity:1} }
+
+  /* Sand beach */
+  #beach {
+    position: absolute;
+    bottom: 14%;
+    left: 26%;
+    width: 18%;
+    height: 8%;
+    background: linear-gradient(180deg, #f9e4b7, #e8c97e);
+    border-radius: 50%;
+    opacity: 0.9;
+  }
+
+  /* ====== SPRITES ====== */
+  .sprite {
+    position: absolute;
+    cursor: pointer;
+    transition: transform 0.15s;
+    filter: drop-shadow(2px 4px 6px rgba(0,0,0,0.2));
+  }
+  .sprite:hover { transform: scale(1.12) translateY(-4px); }
+  .sprite:active { transform: scale(0.95); }
+
+  /* Tree */
+  .tree { font-size: 48px; }
+  .tree.shaken { animation: shake 0.4s ease; }
+  @keyframes shake { 0%{transform:rotate(0)}25%{transform:rotate(-8deg)}75%{transform:rotate(8deg)}100%{transform:rotate(0)} }
+
+  /* Player */
+  #player {
+    position: absolute;
+    font-size: 38px;
+    z-index: 20;
+    cursor: default;
+    filter: drop-shadow(2px 4px 4px rgba(0,0,0,0.3));
+    transition: left 0.2s ease, bottom 0.2s ease;
+  }
+  #player.moving-left { transform: scaleX(-1); }
+  #player.bounce { animation: bounce 0.3s ease; }
+  @keyframes bounce { 0%,100%{margin-bottom:0} 50%{margin-bottom:12px} }
+
+  /* Residents/villagers */
+  .villager {
+    position: absolute;
+    font-size: 32px;
+    cursor: pointer;
+    animation: idle-bob 2s ease-in-out infinite;
+    filter: drop-shadow(1px 3px 4px rgba(0,0,0,0.2));
+  }
+  .villager:nth-child(odd) { animation-delay: -1s; }
+  @keyframes idle-bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-6px)} }
+
+  /* Flowers */
+  .flower { font-size: 22px; cursor: pointer; }
+  .flower:hover { animation: spin 0.5s ease; }
+  @keyframes spin { from{transform:rotate(0)} to{transform:rotate(360deg)} }
+
+  /* Fish */
+  .fish-bob {
+    position: absolute;
+    font-size: 20px;
+    animation: fish-swim 3s ease-in-out infinite;
+  }
+  @keyframes fish-swim { 0%,100%{transform:translateX(0)} 50%{transform:translateX(20px) scaleX(-1)} }
+
+  /* ====== HUD ====== */
+  #hud {
+    position: fixed;
+    top: 12px;
+    left: 12px;
+    right: 12px;
+    display: flex;
+    gap: 8px;
+    align-items: flex-start;
+    z-index: 100;
+    pointer-events: none;
+  }
+
+  .hud-card {
+    background: var(--ui-bg);
+    border: 2.5px solid var(--ui-border);
+    border-radius: 18px;
+    padding: 8px 14px;
+    pointer-events: all;
+    box-shadow: 0 4px 16px rgba(0,0,0,0.12);
+  }
+
+  #island-name {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 18px;
+    color: var(--text);
+    white-space: nowrap;
+  }
+
+  #stats-card {
+    display: flex;
+    gap: 12px;
+    align-items: center;
+    flex-wrap: wrap;
+  }
+  .stat { font-size: 14px; color: var(--text); }
+  .stat span { font-weight: bold; color: var(--accent); }
+
+  #time-card { font-size: 13px; color: var(--text); }
+
+  /* ====== TOOLBAR ====== */
+  #toolbar {
+    position: fixed;
+    bottom: 16px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    z-index: 100;
+  }
+
+  .tool-btn {
+    background: var(--ui-bg);
+    border: 2.5px solid var(--ui-border);
+    border-radius: 16px;
+    width: 58px;
+    height: 58px;
+    font-size: 26px;
+    cursor: pointer;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.15s;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    position: relative;
+  }
+  .tool-btn:hover { transform: translateY(-4px) scale(1.08); background: #fffde0; }
+  .tool-btn:active { transform: scale(0.93); }
+  .tool-btn.active { border-color: var(--accent); background: #fff0f0; }
+  .tool-btn .tool-label {
+    font-size: 9px;
+    color: var(--text);
+    margin-top: 1px;
+    font-family: 'ZCOOL XiaoWei', serif;
+  }
+
+  /* ====== DIALOG BOX ====== */
+  #dialog {
+    position: fixed;
+    bottom: 90px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: min(480px, 90vw);
+    background: var(--ui-bg);
+    border: 3px solid var(--ui-border);
+    border-radius: 20px;
+    padding: 16px 20px;
+    z-index: 200;
+    box-shadow: 0 8px 32px rgba(0,0,0,0.18);
+    display: none;
+    animation: pop-in 0.25s ease;
+  }
+  #dialog.show { display: block; }
+  @keyframes pop-in { from{transform:translateX(-50%) scale(0.85);opacity:0} to{transform:translateX(-50%) scale(1);opacity:1} }
+
+  #dialog-speaker {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 15px;
+    color: var(--accent);
+    margin-bottom: 6px;
+  }
+  #dialog-text {
+    font-size: 15px;
+    color: var(--text);
+    line-height: 1.6;
+  }
+  #dialog-close {
+    margin-top: 10px;
+    background: var(--accent);
+    color: white;
+    border: none;
+    border-radius: 12px;
+    padding: 6px 20px;
+    font-family: 'ZCOOL XiaoWei', serif;
+    font-size: 14px;
+    cursor: pointer;
+    float: right;
+  }
+  #dialog-close:hover { background: #e55555; }
+
+  /* ====== SHOP ====== */
+  #shop-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(360px, 92vw);
+    background: var(--ui-bg);
+    border: 3px solid var(--ui-border);
+    border-radius: 24px;
+    padding: 20px;
+    z-index: 300;
+    display: none;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+    animation: pop-in 0.25s ease;
+  }
+  #shop-panel.show { display: block; }
+
+  #shop-title {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 22px;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 14px;
+  }
+
+  .shop-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px;
+    border-radius: 14px;
+    margin-bottom: 8px;
+    background: rgba(255,249,230,0.8);
+    border: 1.5px solid #e8c97e;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .shop-item:hover { background: #fff3cd; transform: translateX(4px); }
+  .shop-item-left { display: flex; align-items: center; gap: 10px; }
+  .shop-item-emoji { font-size: 24px; }
+  .shop-item-info { font-size: 13px; color: var(--text); }
+  .shop-item-name { font-weight: bold; }
+  .shop-item-desc { font-size: 11px; color: #888; }
+  .shop-item-price { font-size: 13px; color: var(--gold); font-weight: bold; }
+
+  .shop-close {
+    display: block;
+    width: 100%;
+    margin-top: 12px;
+    background: #ddd;
+    border: none;
+    border-radius: 14px;
+    padding: 10px;
+    font-family: 'ZCOOL XiaoWei', serif;
+    font-size: 15px;
+    cursor: pointer;
+    color: var(--text);
+  }
+  .shop-close:hover { background: #ccc; }
+
+  /* ====== INVENTORY ====== */
+  #inventory-panel {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(380px, 92vw);
+    background: var(--ui-bg);
+    border: 3px solid var(--ui-border);
+    border-radius: 24px;
+    padding: 20px;
+    z-index: 300;
+    display: none;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.22);
+    animation: pop-in 0.25s ease;
+  }
+  #inventory-panel.show { display: block; }
+  #inv-title {
+    font-family: 'Ma Shan Zheng', serif;
+    font-size: 22px;
+    color: var(--text);
+    text-align: center;
+    margin-bottom: 14px;
+  }
+  #inv-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 8px;
+    min-height: 80px;
+  }
+  .inv-slot {
+    background: rgba(255,249,230,0.8);
+    border: 1.5px solid #e8c97e;
+    border-radius: 12px;
+    height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    font-size: 22px;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .inv-slot:hover { background: #fffde7; transform: scale(1.05); }
+  .inv-count {
+    position: absolute;
+    bottom: 3px;
+    right: 5px;
+    font-size: 10px;
+    color: var(--text);
+    font-weight: bold;
+  }
+  .inv-empty { opacity: 0.3; font-size: 18px; }
+
+  /* ====== FLOATING NOTIFICATION ====== */
+  .notif {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: rgba(50,50,50,0.88);
+    color: white;
+    padding: 10px 20px;
+    border-radius: 20px;
+    font-size: 15px;
+    z-index: 500;
+    animation: notif-anim 2.2s ease forwards;
+    pointer-events: none;
+  }
+  @keyframes notif-anim {
+    0%{opacity:0;top:60px} 15%{opacity:1;top:80px} 75%{opacity:1;top:80px} 100%{opacity:0;top:60px}
+  }
+
+  /* ====== FISHING MINI-GAME ====== */
+  #fishing-game {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: min(320px, 92vw);
+    background: var(--ui-bg);
+    border: 3px solid var(--water2);
+    border-radius: 24px;
+    padding: 20px;
+    z-index: 400;
+    display: none;
+    text-align: center;
+    box-shadow: 0 16px 48px rgba(0,0,0,0.25);
+  }
+  #fishing-game.show { display: block; animation: pop-in 0.25s ease; }
+  #fishing-title { font-family: 'Ma Shan Zheng', serif; font-size: 20px; color: var(--water2); margin-bottom: 12px; }
+  #fish-meter-wrap {
+    background: #e0f0ff;
+    border-radius: 12px;
+    height: 20px;
+    margin: 12px 0;
+    overflow: hidden;
+    border: 2px solid var(--water);
+  }
+  #fish-meter {
+    height: 100%;
+    background: linear-gradient(90deg, #74b9ff, #0984e3);
+    width: 0%;
+    transition: width 0.1s;
+  }
+  #fish-zone {
+    width: 60%;
+    height: 40px;
+    background: #e8f5ff;
+    border: 2px solid var(--water);
+    border-radius: 12px;
+    position: relative;
+    margin: 0 auto 12px;
+    overflow: hidden;
+  }
+  #fish-cursor {
+    position: absolute;
+    width: 30px;
+    height: 30px;
+    background: var(--water2);
+    border-radius: 50%;
+    top: 5px;
+    left: 5px;
+    transition: left 0.08s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 16px;
+  }
+  #fish-target {
+    position: absolute;
+    top: 0; bottom: 0;
+    background: rgba(86, 171, 47, 0.25);
+    border-radius: 8px;
+    transition: left 0.3s ease;
+  }
+  #fish-btn {
+    background: var(--water2);
+    color: white;
+    border: none;
+    border-radius: 16px;
+    padding: 12px 28px;
+    font-size: 16px;
+    font-family: 'ZCOOL XiaoWei', serif;
+    cursor: pointer;
+    width: 100%;
+    margin-bottom: 8px;
+  }
+  #fish-btn:hover { background: #0773c5; }
+  #fish-cancel { background: none; border: none; color: #888; cursor: pointer; font-size: 13px; font-family: inherit; }
+  #fish-instruction { font-size: 13px; color: #666; margin-bottom: 8px; }
+
+  /* ====== DPAD (mobile movement) ====== */
+  #dpad {
+    position: fixed;
+    bottom: 90px;
+    right: 16px;
+    display: grid;
+    grid-template-columns: repeat(3, 42px);
+    grid-template-rows: repeat(3, 42px);
+    gap: 3px;
+    z-index: 100;
+  }
+  .dpad-btn {
+    background: rgba(255,253,240,0.85);
+    border: 2px solid var(--ui-border);
+    border-radius: 10px;
+    font-size: 18px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.1s;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+  }
+  .dpad-btn:active { background: #ffe082; transform: scale(0.9); }
+  .dpad-center { background: rgba(255,200,100,0.5); }
+
+  /* Decorations */
+  .decor { position: absolute; font-size: 20px; pointer-events: none; }
+  .house { position: absolute; font-size: 52px; cursor: pointer; filter: drop-shadow(2px 6px 8px rgba(0,0,0,0.25)); }
+  .house:hover { transform: scale(1.05); }
+
+  /* Star effect */
+  .star-effect {
+    position: fixed;
+    pointer-events: none;
+    font-size: 22px;
+    z-index: 999;
+    animation: star-float 1s ease forwards;
+  }
+  @keyframes star-float {
+    from { opacity:1; transform: translateY(0) scale(1); }
+    to { opacity:0; transform: translateY(-60px) scale(1.5); }
+  }
+</style>
+</head>
+<body>
+
+<div id="game-world">
+  <div id="sky-bg"></div>
+
+  <!-- Clouds -->
+  <div class="cloud" style="width:90px;height:28px;top:8%;left:5%;animation-duration:22s">
+    <div style="width:50px;height:50px;top:-28px;left:10px;position:absolute;background:white;border-radius:50%"></div>
+    <div style="width:30px;height:30px;top:-16px;left:45px;position:absolute;background:white;border-radius:50%"></div>
+  </div>
+  <div class="cloud" style="width:70px;height:22px;top:14%;left:60%;animation-duration:30s;animation-delay:-12s">
+    <div style="width:40px;height:40px;top:-22px;left:8px;position:absolute;background:white;border-radius:50%"></div>
+  </div>
+  <div class="cloud" style="width:110px;height:30px;top:5%;left:40%;animation-duration:38s;animation-delay:-8s">
+    <div style="width:55px;height:55px;top:-32px;left:15px;position:absolute;background:white;border-radius:50%"></div>
+    <div style="width:35px;height:35px;top:-20px;left:60px;position:absolute;background:white;border-radius:50%"></div>
+  </div>
+
+  <div id="ground"></div>
+  <div id="river">
+    <div class="fish-bob" style="bottom:30%;left:15%">🐟</div>
+    <div class="fish-bob" style="bottom:60%;left:40%;animation-delay:-1.5s">🦐</div>
+  </div>
+  <div id="beach"></div>
+
+  <!-- House -->
+  <div class="house sprite" id="myhouse" style="left:10%;bottom:44%" onclick="talkToHouse()">🏠</div>
+
+  <!-- Shop -->
+  <div class="house sprite" id="shophouse" style="left:70%;bottom:44%" onclick="openShop()" title="商店">🏪</div>
+
+  <!-- Trees -->
+  <div class="tree sprite" id="tree1" style="left:5%;bottom:52%" onclick="shakeTree(this)">🌳</div>
+  <div class="tree sprite" id="tree2" style="left:18%;bottom:56%" onclick="shakeTree(this)">🌲</div>
+  <div class="tree sprite" id="tree3" style="left:82%;bottom:54%" onclick="shakeTree(this)">🌳</div>
+  <div class="tree sprite" id="tree4" style="left:90%;bottom:58%" onclick="shakeTree(this)">🍎</div>
+  <div class="tree sprite" id="tree5" style="left:60%;bottom:52%" onclick="shakeTree(this)">🌴</div>
+
+  <!-- Flowers -->
+  <div class="flower sprite" style="left:22%;bottom:44%" onclick="pickFlower(this)">🌸</div>
+  <div class="flower sprite" style="left:25%;bottom:45%" onclick="pickFlower(this)">🌺</div>
+  <div class="flower sprite" style="left:50%;bottom:44%" onclick="pickFlower(this)">🌼</div>
+  <div class="flower sprite" style="left:54%;bottom:43%" onclick="pickFlower(this)">🌻</div>
+  <div class="flower sprite" style="left:75%;bottom:44%" onclick="pickFlower(this)">🌷</div>
+  <div class="flower sprite" style="left:78%;bottom:45%" onclick="pickFlower(this)">🌹</div>
+
+  <!-- Decorations -->
+  <div class="decor" style="left:32%;bottom:56%">🪨</div>
+  <div class="decor" style="left:65%;bottom:55%">🪨</div>
+  <div class="decor" style="left:48%;bottom:58%">🌿</div>
+
+  <!-- Mushrooms -->
+  <div class="flower sprite" style="left:38%;bottom:44%" onclick="pickMushroom(this)">🍄</div>
+  <div class="flower sprite" style="left:88%;bottom:44%" onclick="pickMushroom(this)">🍄</div>
+
+  <!-- Villagers -->
+  <div class="villager" id="v1" style="left:40%;bottom:46%" onclick="talkToVillager('小布', ['你好啊～今天天气真好！☀️', '我在这里住得超开心，感觉岛上的花越来越多了！', '你有没有试过去河边钓鱼？听说有稀有鱼哦！'])">🐻</div>
+  <div class="villager" id="v2" style="left:55%;bottom:47%" onclick="talkToVillager('可可', ['嗯嗯！好久不见～', '我最近发现一朵好漂亮的花！不过你来了我就送给你好了 🌸', '记得多来找我玩，一个人有点寂寞呢…'])">🐱</div>
+  <div class="villager" id="v3" style="left:80%;bottom:46%" onclick="talkToVillager('胡子', ['哈哈哈！岛主来啦！', '我刚从商店回来，买了好多好东西～', '你知道吗，晚上这里会出现萤火虫！✨'])">🐸</div>
+
+  <!-- Player -->
+  <div id="player" style="left:45%;bottom:46%">🧑</div>
+</div>
+
+<!-- HUD -->
+<div id="hud">
+  <div class="hud-card">
+    <div id="island-name">🌿 梦想小岛</div>
+  </div>
+  <div class="hud-card" id="stats-card">
+    <div class="stat">🪙 铃钱: <span id="bells">500</span></div>
+    <div class="stat">🎒 物品: <span id="inv-count">0</span></div>
+    <div class="stat">⭐ 评分: <span id="rating">1</span>星</div>
+  </div>
+  <div class="hud-card" id="time-card" onclick="openInventory()" style="cursor:pointer">
+    📦 背包
+  </div>
+</div>
+
+<!-- Toolbar -->
+<div id="toolbar">
+  <div class="tool-btn" id="tool-net" onclick="setTool('net')">
+    🦋<div class="tool-label">捕虫</div>
+  </div>
+  <div class="tool-btn" id="tool-fish" onclick="startFishing()">
+    🎣<div class="tool-label">钓鱼</div>
+  </div>
+  <div class="tool-btn" id="tool-axe" onclick="setTool('axe')">
+    🪓<div class="tool-label">砍木</div>
+  </div>
+  <div class="tool-btn active" id="tool-walk" onclick="setTool('walk')">
+    👟<div class="tool-label">移动</div>
+  </div>
+  <div class="tool-btn" id="tool-sell" onclick="openShop()">
+    🏪<div class="tool-label">商店</div>
+  </div>
+</div>
+
+<!-- D-pad -->
+<div id="dpad">
+  <div></div>
+  <div class="dpad-btn" onmousedown="startMove('up')" ontouchstart="startMove('up')" onmouseup="stopMove()" ontouchend="stopMove()">▲</div>
+  <div></div>
+  <div class="dpad-btn" onmousedown="startMove('left')" ontouchstart="startMove('left')" onmouseup="stopMove()" ontouchend="stopMove()">◀</div>
+  <div class="dpad-btn dpad-center" onclick="interact()">✨</div>
+  <div class="dpad-btn" onmousedown="startMove('right')" ontouchstart="startMove('right')" onmouseup="stopMove()" ontouchend="stopMove()">▶</div>
+  <div></div>
+  <div class="dpad-btn" onmousedown="startMove('down')" ontouchstart="startMove('down')" onmouseup="stopMove()" ontouchend="stopMove()">▼</div>
+  <div></div>
+</div>
+
+<!-- Dialog -->
+<div id="dialog">
+  <div id="dialog-speaker"></div>
+  <div id="dialog-text"></div>
+  <button id="dialog-close" onclick="closeDialog()">好哒 ✓</button>
+</div>
+
+<!-- Shop -->
+<div id="shop-panel">
+  <div id="shop-title">🏪 汤姆杂货铺</div>
+  <div id="shop-items"></div>
+  <div style="border-top:1.5px solid #e8c97e;margin:10px 0 6px;padding-top:8px;font-size:13px;color:#888;text-align:center">── 出售物品 ──</div>
+  <div id="sell-items"></div>
+  <button class="shop-close" onclick="closeShop()">关闭商店</button>
+</div>
+
+<!-- Inventory -->
+<div id="inventory-panel">
+  <div id="inv-title">🎒 我的背包</div>
+  <div id="inv-grid"></div>
+  <button class="shop-close" onclick="closeInventory()" style="margin-top:12px">关闭背包</button>
+</div>
+
+<!-- Fishing game -->
+<div id="fishing-game">
+  <div id="fishing-title">🎣 钓鱼中！</div>
+  <div id="fish-instruction">保持鱼在绿色区域内！</div>
+  <div id="fish-zone">
+    <div id="fish-target" style="width:35%;left:30%"></div>
+    <div id="fish-cursor">🎯</div>
+  </div>
+  <div id="fish-meter-wrap"><div id="fish-meter"></div></div>
+  <button id="fish-btn" onclick="fishPress()">按住！</button>
+  <button id="fish-cancel" onclick="cancelFishing()">放弃</button>
+</div>
+
+<script>
+// ====== GAME STATE ======
+const state = {
+  bells: 500,
+  tool: 'walk',
+  inventory: {},
+  villagerMsgs: {},
+  rating: 1,
+  playerX: 45,
+  playerY: 46,
+  moveDir: null,
+  moveTimer: null,
+  dialogQueue: [],
+  currentSpeaker: '',
+};
+
+const SHOP_BUY = [
+  { emoji:'🪴', name:'盆栽', desc:'放在家门口', price: 200 },
+  { emoji:'🌂', name:'雨伞', desc:'下雨天必备', price: 150 },
+  { emoji:'🎪', name:'帐篷', desc:'升级住所', price: 800 },
+  { emoji:'🪑', name:'椅子', desc:'让朋友坐坐', price: 120 },
+  { emoji:'🎵', name:'留声机', desc:'播放音乐', price: 350 },
+];
+
+const ITEMS = {
+  '🍎': { name:'苹果', sell:40 },
+  '🍊': { name:'橘子', sell:40 },
+  '🌸': { name:'樱花', sell:25 },
+  '🌺': { name:'红花', sell:25 },
+  '🌼': { name:'菊花', sell:25 },
+  '🌻': { name:'向日葵', sell:30 },
+  '🌷': { name:'郁金香', sell:28 },
+  '🌹': { name:'玫瑰', sell:35 },
+  '🍄': { name:'蘑菇', sell:50 },
+  '🪵': { name:'木材', sell:30 },
+  '🦋': { name:'蝴蝶', sell:80 },
+  '🐞': { name:'瓢虫', sell:60 },
+  '🐠': { name:'热带鱼', sell:120 },
+  '🐡': { name:'河豚', sell:150 },
+  '🐟': { name:'小鱼', sell:80 },
+  '🦈': { name:'鲨鱼！', sell:500 },
+  '🦑': { name:'乌贼', sell:100 },
+};
+
+// ====== TOOL ======
+function setTool(t) {
+  state.tool = t;
+  document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+  document.getElementById('tool-' + t)?.classList.add('active');
+  notify(t === 'net' ? '🦋 捕虫模式！点击树或草地' : t === 'axe' ? '🪓 砍木模式！点击树' : '👟 移动模式');
+}
+
+// ====== PLAYER MOVEMENT ======
+function startMove(dir) {
+  state.moveDir = dir;
+  moveStep();
+  state.moveTimer = setInterval(moveStep, 120);
+}
+function stopMove() {
+  state.moveDir = null;
+  clearInterval(state.moveTimer);
+}
+function moveStep() {
+  const player = document.getElementById('player');
+  const speed = 2.5;
+  if (state.moveDir === 'left') { state.playerX -= speed; player.classList.add('moving-left'); }
+  else if (state.moveDir === 'right') { state.playerX += speed; player.classList.remove('moving-left'); }
+  else if (state.moveDir === 'up') state.playerY += speed * 0.5;
+  else if (state.moveDir === 'down') state.playerY -= speed * 0.5;
+  state.playerX = Math.max(2, Math.min(94, state.playerX));
+  state.playerY = Math.max(42, Math.min(58, state.playerY));
+  player.style.left = state.playerX + '%';
+  player.style.bottom = state.playerY + '%';
+  player.classList.add('bounce');
+  setTimeout(() => player.classList.remove('bounce'), 300);
+}
+
+// Keyboard
+document.addEventListener('keydown', e => {
+  const keys = { ArrowLeft:'left', ArrowRight:'right', ArrowUp:'up', ArrowDown:'down',
+    'a':'left','d':'right','w':'up','s':'down' };
+  if (keys[e.key]) { e.preventDefault(); startMove(keys[e.key]); }
+  if (e.key === ' ') interact();
+});
+document.addEventListener('keyup', e => {
+  const keys = ['ArrowLeft','ArrowRight','ArrowUp','ArrowDown','a','d','w','s'];
+  if (keys.includes(e.key)) stopMove();
+});
+
+// ====== INTERACTIONS ======
+function shakeTree(el) {
+  if (el.classList.contains('shaken')) return;
+  el.classList.add('shaken');
+  setTimeout(() => el.classList.remove('shaken'), 400);
+
+  if (state.tool === 'axe') {
+    starEffect(el, '🪵');
+    addItem('🪵', 2);
+    notify('🪵 获得了2块木材！');
+    return;
+  }
+  if (state.tool === 'net') {
+    const bugs = ['🦋','🐞','🦗','🐛'];
+    const bug = bugs[Math.floor(Math.random()*bugs.length)];
+    if (bug === '🦋' || bug === '🐞') {
+      starEffect(el, bug);
+      addItem(bug, 1);
+      notify(bug + ' 抓到昆虫！');
+    } else {
+      notify('🌿 什么都没有…');
+    }
+    return;
+  }
+  // shake fruit
+  const rand = Math.random();
+  if (rand < 0.5) {
+    const fruits = ['🍎','🍊','🍋','🫐'];
+    const fruit = fruits[Math.floor(Math.random()*fruits.length)];
+    starEffect(el, fruit);
+    addItem(fruit, 1);
+    notify('🍎 摇下了一个' + (ITEMS[fruit]?.name || '水果') + '！');
+  } else if (rand < 0.65) {
+    addBells(100);
+    starEffect(el, '🪙');
+    notify('🪙 树上掉下了100铃钱！');
+  } else {
+    notify('🌳 什么都没摇下来…');
+  }
+}
+
+function pickFlower(el) {
+  const emoji = el.textContent.trim();
+  starEffect(el, '✨');
+  el.style.visibility = 'hidden';
+  addItem(emoji, 1);
+  notify((ITEMS[emoji]?.name || '花') + ' 采集成功！');
+  setTimeout(() => { el.style.visibility = 'visible'; }, 15000);
+}
+
+function pickMushroom(el) {
+  const emoji = '🍄';
+  starEffect(el, '✨');
+  el.style.visibility = 'hidden';
+  addItem(emoji, 1);
+  notify('🍄 采到了蘑菇！');
+  setTimeout(() => { el.style.visibility = 'visible'; }, 20000);
+}
+
+function talkToHouse() {
+  const msgs = [
+    '这是你温馨的小屋！🏠\n好好建设这座岛吧，让大家都来这里定居！',
+    '家里看起来还不错…\n不知道什么时候能换个更大的？',
+    '岛上还缺很多居民呢，多和朋友们互动来提升岛屿评分吧！⭐',
+  ];
+  showDialog('我的小屋', msgs[Math.floor(Math.random()*msgs.length)]);
+}
+
+let villagerMsgIdx = {};
+function talkToVillager(name, msgs) {
+  if (!villagerMsgIdx[name]) villagerMsgIdx[name] = 0;
+  const msg = msgs[villagerMsgIdx[name] % msgs.length];
+  villagerMsgIdx[name]++;
+  showDialog(name + ' 说', msg);
+  // Sometimes give item
+  if (Math.random() < 0.25 && state.bells > 0) {
+    const gift = ['🌸','🍎','🌼'][Math.floor(Math.random()*3)];
+    setTimeout(() => {
+      addItem(gift, 1);
+      notify('💌 ' + name + ' 送给你一个礼物！' + gift);
+    }, 2000);
+  }
+}
+
+function interact() {
+  notify('✨ 使用方向键移动，点击物体互动！');
+}
+
+// ====== FISHING ======
+let fishingState = {
+  active: false,
+  cursorX: 5,
+  targetX: 30,
+  targetW: 35,
+  progress: 0,
+  pressing: false,
+  interval: null,
+  targetInterval: null,
+};
+
+function startFishing() {
+  document.getElementById('fishing-game').classList.add('show');
+  fishingState.cursorX = 5;
+  fishingState.targetX = 30;
+  fishingState.progress = 0;
+  fishingState.pressing = false;
+  fishingState.active = true;
+  updateFishUI();
+  clearInterval(fishingState.interval);
+  clearInterval(fishingState.targetInterval);
+  fishingState.interval = setInterval(fishTick, 80);
+  fishingState.targetInterval = setInterval(moveTarget, 1000 + Math.random()*500);
+}
+
+function moveTarget() {
+  if (!fishingState.active) return;
+  fishingState.targetX = 5 + Math.random() * 55;
+}
+
+function fishTick() {
+  const fs = fishingState;
+  // Cursor: rise when pressing, fall when not
+  if (fs.pressing) fs.cursorX = Math.min(fs.cursorX + 2, 62);
+  else fs.cursorX = Math.max(fs.cursorX - 1.5, 2);
+  // Check overlap
+  const inZone = fs.cursorX >= fs.targetX && fs.cursorX <= fs.targetX + fs.targetW;
+  if (inZone) fs.progress = Math.min(fs.progress + 2, 100);
+  else fs.progress = Math.max(fs.progress - 1.5, 0);
+  updateFishUI();
+  if (fs.progress >= 100) { caughtFish(); }
+  if (fs.progress <= 0 && !inZone && Math.random() < 0.005) { missedFish(); }
+}
+
+function updateFishUI() {
+  const fs = fishingState;
+  document.getElementById('fish-cursor').style.left = fs.cursorX + '%';
+  document.getElementById('fish-target').style.left = fs.targetX + '%';
+  document.getElementById('fish-target').style.width = fs.targetW + '%';
+  document.getElementById('fish-meter').style.width = fs.progress + '%';
+}
+
+function fishPress() {
+  fishingState.pressing = true;
+}
+document.getElementById('fish-btn').addEventListener('mousedown', () => { fishingState.pressing = true; });
+document.getElementById('fish-btn').addEventListener('mouseup', () => { fishingState.pressing = false; });
+document.getElementById('fish-btn').addEventListener('touchstart', (e) => { e.preventDefault(); fishingState.pressing = true; });
+document.getElementById('fish-btn').addEventListener('touchend', () => { fishingState.pressing = false; });
+
+function caughtFish() {
+  clearInterval(fishingState.interval);
+  clearInterval(fishingState.targetInterval);
+  fishingState.active = false;
+  document.getElementById('fishing-game').classList.remove('show');
+  const fishes = ['🐠','🐡','🐟','🦑','🦐','🦈'];
+  const weights = [0.3, 0.2, 0.25, 0.1, 0.1, 0.05];
+  let r = Math.random(), fish = fishes[0];
+  let cum = 0;
+  for (let i = 0; i < fishes.length; i++) { cum += weights[i]; if (r < cum) { fish = fishes[i]; break; } }
+  addItem(fish, 1);
+  const fishName = ITEMS[fish]?.name || '鱼';
+  notify('🎉 钓到了' + fishName + ' ' + fish + '！');
+  showDialog('钓鱼成功！', '哇！你钓上了一条' + fishName + '！\n当前价值：' + (ITEMS[fish]?.sell || 80) + ' 铃钱～可以在商店卖掉！');
+}
+
+function missedFish() {
+  clearInterval(fishingState.interval);
+  clearInterval(fishingState.targetInterval);
+  fishingState.active = false;
+  document.getElementById('fishing-game').classList.remove('show');
+  notify('💦 鱼跑掉了……再试一次吧！');
+}
+
+function cancelFishing() {
+  clearInterval(fishingState.interval);
+  clearInterval(fishingState.targetInterval);
+  fishingState.active = false;
+  document.getElementById('fishing-game').classList.remove('show');
+}
+
+// ====== SHOP ======
+function openShop() {
+  const panel = document.getElementById('shop-panel');
+  panel.classList.add('show');
+  renderShop();
+}
+function closeShop() {
+  document.getElementById('shop-panel').classList.remove('show');
+}
+
+function renderShop() {
+  // Buy
+  const buyDiv = document.getElementById('shop-items');
+  buyDiv.innerHTML = SHOP_BUY.map(item => `
+    <div class="shop-item" onclick="buyItem('${item.emoji}','${item.name}',${item.price})">
+      <div class="shop-item-left">
+        <div class="shop-item-emoji">${item.emoji}</div>
+        <div class="shop-item-info">
+          <div class="shop-item-name">${item.name}</div>
+          <div class="shop-item-desc">${item.desc}</div>
+        </div>
+      </div>
+      <div class="shop-item-price">🪙${item.price}</div>
+    </div>
+  `).join('');
+  // Sell
+  const sellDiv = document.getElementById('sell-items');
+  const sellable = Object.entries(state.inventory).filter(([k,v]) => v > 0 && ITEMS[k]);
+  if (sellable.length === 0) {
+    sellDiv.innerHTML = '<div style="text-align:center;color:#aaa;font-size:13px">背包里没有可卖的东西</div>';
+  } else {
+    sellDiv.innerHTML = sellable.map(([emoji, qty]) => {
+      const item = ITEMS[emoji];
+      return `<div class="shop-item" onclick="sellItem('${emoji}')">
+        <div class="shop-item-left">
+          <div class="shop-item-emoji">${emoji}</div>
+          <div class="shop-item-info">
+            <div class="shop-item-name">${item.name} ×${qty}</div>
+            <div class="shop-item-desc">单价 ${item.sell} 铃钱</div>
+          </div>
+        </div>
+        <div class="shop-item-price" style="color:#56ab2f">卖掉</div>
+      </div>`;
+    }).join('');
+  }
+}
+
+function buyItem(emoji, name, price) {
+  if (state.bells < price) {
+    notify('💸 铃钱不够！需要 ' + price + ' 铃钱');
+    return;
+  }
+  addBells(-price);
+  addItem(emoji, 1);
+  notify('🛍️ 购买了 ' + name + '！');
+  renderShop();
+}
+
+function sellItem(emoji) {
+  if (!state.inventory[emoji] || state.inventory[emoji] <= 0) return;
+  const item = ITEMS[emoji];
+  addBells(item.sell);
+  state.inventory[emoji]--;
+  if (state.inventory[emoji] <= 0) delete state.inventory[emoji];
+  notify('💰 卖出了 ' + item.name + '，获得 ' + item.sell + ' 铃钱！');
+  updateHUD();
+  renderShop();
+}
+
+// ====== INVENTORY ======
+function openInventory() {
+  document.getElementById('inventory-panel').classList.add('show');
+  renderInventory();
+}
+function closeInventory() {
+  document.getElementById('inventory-panel').classList.remove('show');
+}
+function renderInventory() {
+  const grid = document.getElementById('inv-grid');
+  const items = Object.entries(state.inventory).filter(([k,v]) => v > 0);
+  let html = items.map(([emoji, qty]) => `
+    <div class="inv-slot" title="${ITEMS[emoji]?.name || emoji}" onclick="invItemClick('${emoji}')">
+      ${emoji}
+      <div class="inv-count">×${qty}</div>
+    </div>
+  `).join('');
+  const empty = Math.max(0, 12 - items.length);
+  html += Array(empty).fill('<div class="inv-slot inv-empty">📦</div>').join('');
+  grid.innerHTML = html;
+}
+function invItemClick(emoji) {
+  const item = ITEMS[emoji];
+  if (item) notify(emoji + ' ' + item.name + ' — 可在商店卖 ' + item.sell + ' 铃钱');
+}
+
+// ====== DIALOG ======
+function showDialog(speaker, text) {
+  document.getElementById('dialog-speaker').textContent = speaker;
+  document.getElementById('dialog-text').textContent = text;
+  document.getElementById('dialog').classList.add('show');
+}
+function closeDialog() {
+  document.getElementById('dialog').classList.remove('show');
+}
+
+// ====== UTILS ======
+function addItem(emoji, qty) {
+  if (!state.inventory[emoji]) state.inventory[emoji] = 0;
+  state.inventory[emoji] += qty;
+  updateHUD();
+}
+
+function addBells(n) {
+  state.bells += n;
+  if (state.bells < 0) state.bells = 0;
+  updateRating();
+  updateHUD();
+}
+
+function updateRating() {
+  const inv = Object.values(state.inventory).reduce((a,b) => a+b, 0);
+  state.rating = Math.min(5, 1 + Math.floor(state.bells/500) + Math.floor(inv/5));
+}
+
+function updateHUD() {
+  document.getElementById('bells').textContent = state.bells;
+  const inv = Object.values(state.inventory).reduce((a,b) => a+b, 0);
+  document.getElementById('inv-count').textContent = inv;
+  updateRating();
+  document.getElementById('rating').textContent = '⭐'.repeat(state.rating);
+}
+
+function starEffect(el, symbol) {
+  const rect = el.getBoundingClientRect();
+  const star = document.createElement('div');
+  star.className = 'star-effect';
+  star.style.left = (rect.left + rect.width/2 - 16) + 'px';
+  star.style.top = (rect.top) + 'px';
+  star.textContent = symbol;
+  document.body.appendChild(star);
+  setTimeout(() => star.remove(), 1000);
+}
+
+function notify(text) {
+  const existing = document.querySelector('.notif');
+  if (existing) existing.remove();
+  const el = document.createElement('div');
+  el.className = 'notif';
+  el.textContent = text;
+  document.body.appendChild(el);
+  setTimeout(() => el.remove(), 2200);
+}
+
+// ====== CLOCK ======
+function updateClock() {
+  const now = new Date();
+  const h = now.getHours().toString().padStart(2,'0');
+  const m = now.getMinutes().toString().padStart(2,'0');
+  const days = ['日','一','二','三','四','五','六'];
+  document.getElementById('time-card').textContent = `📦 背包 · ${h}:${m} 周${days[now.getDay()]}`;
+}
+setInterval(updateClock, 1000);
+updateClock();
+
+// ====== VILLAGER AUTO WANDER ======
+function wanderVillagers() {
+  ['v1','v2','v3'].forEach((id, i) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    const baseX = [40, 55, 80][i];
+    const dx = (Math.random() - 0.5) * 6;
+    el.style.left = Math.max(5, Math.min(90, baseX + dx)) + '%';
+  });
+}
+setInterval(wanderVillagers, 3000);
+
+// ====== WELCOME ======
+setTimeout(() => {
+  showDialog('游戏提示 🌿', '欢迎来到梦想小岛！\n\n操作方式：\n👟 用方向键或D-pad移动\n🌳 点击树→摇树（先选工具）\n🌸 点击花→采花\n🎣 点击钓鱼按钮→钓鱼\n👥 点击居民→聊天\n🏪 去商店买卖物品\n📦 点击背包查看物品\n\n祝你玩得开心！٩(˃̶͈̀ロ˂̶͈́)و');
+}, 800);
+</script>
+</body>
+</html>
